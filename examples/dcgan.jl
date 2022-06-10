@@ -8,7 +8,7 @@ using Flux: params, update!
 using Flux.Data: DataLoader
 using NeuralOperators
 using Random
-using Downscaling: PatchDiscriminator, OperatorUNetGenerator
+using Downscaling: PatchDiscriminator, UNetGenerator
 
 # Parameters
 FT = Float32
@@ -30,54 +30,40 @@ gen_lr = FT(0.0002)
 color_format = Gray
 
 # Define models
-generator_A = UNetGenerator(input_channels) |> device
 generator_B = UNetGenerator(input_channels) |> device
-discriminator_A = PatchDiscriminator(input_channels) |> device # Discriminator For Domain A
-discriminator_B = PatchDiscriminator(input_channels) |> device # Discriminator For Domain B
-networks = (generator_A, generator_B, discriminator_A, discriminator_B)
+discriminator_A = PatchDiscriminator(input_channels) |> device # Discriminator For Domain B
+networks = (generator_B, discriminator_A)
 
 function generator_loss(a, b)
-    a_fake = generator_B(b) # Fake image generated in domain A
-    b_fake = generator_A(a) # Fake image generated in domain B
+    a_fake = generator_B(b) # Fake image generated
 
-    b_fake_prob = discriminator_B(b_fake) # Probability that generated image in domain B is real
     a_fake_prob = discriminator_A(a_fake) # Probability that generated image in domain A is real
 
     gen_A_loss = mean((a_fake_prob .- 1) .^ 2)
-    rec_A_loss = mean(abs.(b - generator_A(a_fake))) # Cycle-consistency loss for domain B
-    idt_A_loss = mean(abs.(generator_A(b) .- b)) # Identity loss for domain B
-    gen_B_loss = mean((b_fake_prob .- 1) .^ 2)
-    rec_B_loss = mean(abs.(a - generator_B(b_fake))) # Cycle-consistency loss for domain A
-    idt_B_loss = mean(abs.(generator_B(a) .- a)) # Identity loss for domain A
 
-    return gen_A_loss + gen_B_loss + λ * (rec_A_loss + rec_B_loss + λid * (idt_A_loss + idt_B_loss))
+    return gen_A_loss
 end
 
 function discriminator_loss(a, b)
-    a_fake = generator_B(b) # Fake image generated in domain A
-    b_fake = generator_A(a) # Fake image generated in domain B
+    a_fake = generator_B(b) # Fake image generated
 
-    a_fake_prob = discriminator_A(a_fake) # Probability that generated image in domain A is real
-    a_real_prob = discriminator_A(a) # Probability that an original image in domain A is real
-    b_fake_prob = discriminator_B(b_fake) # Probability that generated image in domain B is real
-    b_real_prob = discriminator_B(b) # Probability that an original image in domain B is real
+    a_fake_prob = discriminator_A(a_fake) # Probability that generated image is real
+    a_real_prob = discriminator_A(a) # Probability that an original image is real
 
     real_A_loss = mean((a_real_prob .- 1) .^ 2)
     fake_A_loss = mean((a_fake_prob .- 0) .^ 2)
-    real_B_loss = mean((b_real_prob .- 1) .^ 2)
-    fake_B_loss = mean((b_fake_prob .- 0) .^ 2)
 
-    return real_A_loss + fake_A_loss + real_B_loss + fake_B_loss
+    return real_A_loss + fake_A_loss
 end
 
 function train_step(opt_gen, opt_dis, a, b)
     # Optimize Discriminators
-    ps = params(params(discriminator_A)..., params(discriminator_B)...)
+    ps = params(discriminator_A)
     gs = gradient(() -> discriminator_loss(a, b), ps)
     update!(opt_dis, ps, gs)
 
     # Optimize Generators
-    ps = params(params(generator_A)..., params(generator_B)...)
+    ps = params(generator_B)
     gs = gradient(() -> generator_loss(a, b), ps)
     update!(opt_gen, ps, gs)
 
@@ -91,7 +77,7 @@ end
 function training()
     # Load data
     dataA = load_dataset(input_path * exp_name * "/trainA/", img_size, FT, color_format)[:, :, :, 1:num_examples] |> device
-    dataB = load_dataset(input_path * exp_name * "/trainB/", img_size, FT, color_format)[:, :, :, 1:num_examples] |> device
+    dataB = rand(FT, img_size, img_size, input_channels, num_examples) |> device
     data = DataLoader((dataA, dataB), batchsize=batch_size, shuffle=true)
 
     # Define Optimizers
@@ -100,21 +86,21 @@ function training()
 
     # Training loop
     total_iters = 0
-    @info "Training begins..."
+    println("Training begins...")
     for epoch in 1:num_epochs
         epoch_start = Dates.now()
-        @info "Epoch: $epoch -------------------------------------------------------------------"
+        println("Epoch: $epoch -------------------------------------------------------------------")
         for (batch_idx, (a, b)) in enumerate(data)
             a, b = normalize(a), normalize(b)
             g_loss, d_loss = train_step(opt_gen, opt_dis, a, b)
             total_iters += batch_size
 
             if total_iters % eval_freq == 0
-                @info "Total iteration: $total_iters - Generator loss: $g_loss, Discriminator loss: $d_loss"
+                println("Total iteration: $total_iters - Generator loss: $g_loss, Discriminator loss: $d_loss")
             end
 
             if total_iters % checkpoint_freq == 0
-                @info "Total iteration: $total_iters - Checkpointing model."
+                println("Total iteration: $total_iters - Checkpointing model.")
                 file_last = output_path * exp_name * "/checkpoint_latest.bson"
                 networks_cpu = networks |> cpu
                 @save file_last networks_cpu
@@ -123,30 +109,9 @@ function training()
                 save_model_samples(prefix_path, a, b)
             end
         end
-        @info "Epoch duration: $(Dates.canonicalize(Dates.now() - epoch_start))"
+        println("Epoch duration: $(Dates.canonicalize(Dates.now() - epoch_start))")
     end
 end
-
-# function testing()
-#     # Load data
-#     dataA = load_dataset(input_path * exp_name * "/testA/", img_size, FT)[:, :, :, 1:num_examples] |> device
-#     dataB = load_dataset(input_path * exp_name * "/testB/", img_size, FT)[:, :, :, 1:num_examples] |> device
-#     data = DataLoader((dataA, dataB), batchsize=1, shuffle=false)
-
-#     # Load generators
-#     genA, genB, _, _ = @load output_path * exp_name * "checkpint_latest.bson"
-#     Flux.loadmodel!(generator_A, genA)
-#     Flux.loadmodel!(generator_B, genB)
-
-#     # Testing loop
-#     @info "Testing begins..."
-#     for (sample_idx, (a, b)) in enumerate(data)
-#         a, b = normalize(a), normalize(b)
-#         prefix_path = output_path * exp_name * "/testing/" * "image_$(sample_idx)"
-#         save_model_samples(path, a, b)
-#     end
-#     @info "Testing complete."
-# end
 
 # Utils
 function normalize(x)
@@ -185,15 +150,12 @@ function load_dataset(path, img_size=256, FT=Float32, color_format=RGB)
 end
 
 function save_model_samples(prefix_path, a, b)
-    fake_B = generator_A(a)
     fake_A = generator_B(b)
-    rec_B = generator_A(fake_A)
-    rec_A = generator_B(fake_B)
 
     # Save the images
-    imgs = [a, fake_A, rec_A, b, fake_B, rec_B] |> cpu
+    imgs = [a, fake_A] |> cpu
     imgs = map(unnormalize, imgs)
-    suffices = ["real_A", "fake_A", "rec_A", "real_B", "fake_B", "rec_B"]
+    suffices = ["real_A", "fake_A"]
     for (img_batch, suffix) in zip(imgs, suffices)
         for img_idx in 1:size(img_batch)[end]
             path = prefix_path * "_$(suffix)_$(img_idx).png"

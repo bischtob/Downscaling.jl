@@ -30,8 +30,10 @@ gen_lr = FT(0.0002)
 color_format = Gray
 
 # Define models
-generator_A = UNetGenerator(input_channels) |> device
-generator_B = UNetGenerator(input_channels) |> device
+num_features = 8
+σ = relu
+generator_A = OperatorUNetGenerator(input_channels) |> device
+generator_B = OperatorUNetGenerator(input_channels) |> device
 discriminator_A = PatchDiscriminator(input_channels) |> device # Discriminator For Domain A
 discriminator_B = PatchDiscriminator(input_channels) |> device # Discriminator For Domain B
 networks = (generator_A, generator_B, discriminator_A, discriminator_B)
