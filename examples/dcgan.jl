@@ -76,7 +76,7 @@ end
 
 function training()
     # Load data
-    dataA = load_dataset(input_path * exp_name * "/trainA/", img_size, FT, color_format)[:, :, :, 1:num_examples] |> device
+    dataA = load_dataset(input_path * exp_name * "/trainB/", img_size, FT, color_format)[:, :, :, 1:num_examples] |> device
     dataB = rand(FT, img_size, img_size, input_channels, num_examples) |> device
     data = DataLoader((dataA, dataB), batchsize=batch_size, shuffle=true)
 

@@ -30,8 +30,8 @@ gen_lr = FT(0.0002)
 color_format = Gray
 
 # Define models
-ch = (1, 64, 64, 64, 64, 64, 1)
-modes = ((4, 4), (16, 16), (64, 64), (256, 256),)
+ch = (1, 8, 8, 8, 8, 8, 1)
+modes = ((4, 4), (256, 256), (256, 256), (256, 256),)
 σ = gelu
 generator_B = Chain(
     OperatorConv(1 => ch[3], modes[1], FourierTransform, permuted=true),
@@ -45,20 +45,8 @@ generator_B = Chain(
     x -> gelu.(x),
     OperatorConv(ch[5] => 1, modes[4], FourierTransform, permuted=true),
     x -> tanh.(x),
-    ) |> device
-discriminator_A = Chain(
-    OperatorConv(1 => ch[3], modes[end], FourierTransform, permuted=true),
-    InstanceNorm(ch[3]),
-    x -> leakyrelu.(x, 0.2f0),
-    OperatorConv(ch[3] => ch[4], modes[end-1], FourierTransform, permuted=true),
-    InstanceNorm(ch[4]),
-    x -> leakyrelu.(x, 0.2f0),
-    OperatorConv(ch[4] => ch[5], modes[end-2], FourierTransform, permuted=true),
-    InstanceNorm(ch[5]),
-    x -> leakyrelu.(x, 0.2f0),
-    OperatorConv(ch[5] => 1, modes[end-3], FourierTransform, permuted=true),
-    x -> leakyrelu.(x, 0.2f0),
 ) |> device
+discriminator_A = PatchDiscriminator(input_channels) |> device # Discriminator For Domain B
 networks = (generator_B, discriminator_A)
 
 function generator_loss(a, b)
@@ -103,7 +91,7 @@ end
 
 function training()
     # Load data
-    dataA = load_dataset(input_path * exp_name * "/trainA/", img_size, FT, color_format)[:, :, :, 1:num_examples] |> device
+    dataA = load_dataset(input_path * exp_name * "/trainB/", img_size, FT, color_format)[:, :, :, 1:num_examples] |> device
     dataB = rand(FT, img_size, img_size, input_channels, num_examples) |> device
     data = DataLoader((dataA, dataB), batchsize=batch_size, shuffle=true)
 
