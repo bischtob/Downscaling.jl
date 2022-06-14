@@ -41,10 +41,10 @@ function UNetGenerator(
     )
 
     return UNetGenerator(
-        initial_layer, 
-        downsampling_blocks, 
-        resnet_blocks, 
-        upsampling_blocks, 
+        initial_layer,
+        downsampling_blocks,
+        resnet_blocks,
+        upsampling_blocks,
         final_layer
     ) |> device
 end
@@ -76,7 +76,7 @@ function ConvBlock(
     out_channels::Int,
     with_activation::Bool=true,
     down::Bool=true,
-    device = gpu;
+    device=gpu;
     kwargs...
 )
     return ConvBlock(
@@ -99,6 +99,10 @@ function (net::ConvBlock)(x)
     return net.conv(x)
 end
 
+
+"""
+    ResidualBlock
+"""
 struct ResidualBlock
     block
 end
@@ -107,7 +111,7 @@ end
 
 function ResidualBlock(
     in_channels::Int,
-    device = gpu
+    device=gpu
 )
     return ResidualBlock(
         Chain(

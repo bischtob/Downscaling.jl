@@ -30,7 +30,22 @@ gen_lr = FT(0.0002)
 color_format = Gray
 
 # Define models
-generator_B = UNetGenerator(input_channels) |> device
+ch = (1, 8, 8, 8, 8, 8, 1)
+modes = ((4, 4), (256, 256), (256, 256), (256, 256),)
+σ = gelu
+generator_B = Chain(
+    OperatorConv(1 => ch[3], modes[1], FourierTransform, permuted=true),
+    InstanceNorm(ch[3]),
+    x -> gelu.(x),
+    OperatorConv(ch[3] => ch[4], modes[2], FourierTransform, permuted=true),
+    InstanceNorm(ch[4]),
+    x -> gelu.(x),
+    OperatorConv(ch[4] => ch[5], modes[3], FourierTransform, permuted=true),
+    InstanceNorm(ch[5]),
+    x -> gelu.(x),
+    OperatorConv(ch[5] => 1, modes[4], FourierTransform, permuted=true),
+    x -> tanh.(x),
+) |> device
 discriminator_A = PatchDiscriminator(input_channels) |> device # Discriminator For Domain B
 networks = (generator_B, discriminator_A)
 
