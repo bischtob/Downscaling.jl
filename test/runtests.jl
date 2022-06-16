@@ -65,35 +65,28 @@ float_types = [Float16, Float32]
         x = randn(FT, (img_size, img_size, in_channels, batch_size))
         @test unet(x) |> size == (img_size, img_size, in_channels, batch_size)
     
-        # OperatorConvBlock
-        modes = 4
+        # OperatorBlock
         in_channels = 3
         out_channels = 7
-        with_activation = true
-        down = true
+        modes = (4, 4)
         batch_size = 13
         img_size = 97
-        conv_block = OperatorConvBlock(in_channels, out_channels, (modes, modes), with_activation)
         x = randn(FT, (img_size, img_size, in_channels, batch_size))
-        @test conv_block(x) |> size == (97, 97, 7, 13)
+        block = OperatorBlock(in_channels, out_channels, modes, permuted=true)
+        @test block(x) |> size == (97, 97, 7, 13)
+        conv_block = OperatorBlock(in_channels, out_channels, modes, permuted=true, normed=true)
+        @test block(x) |> size == (97, 97, 7, 13)
     
-        # OperatorResidualBlock
+        # UNetOperator
         in_channels = 3
-        modes = 4
+        num_features = 12
+        modes = (4, 4)
+        num_subsample = 4
+        num_nonlinear = 4
         batch_size = 13
         img_size = 97
-        residual_block = OperatorResidualBlock(in_channels, (modes, modes))
+        op = UNetOperator(in_channels, num_features, modes, num_subsample, num_nonlinear)
         x = randn(FT, (img_size, img_size, in_channels, batch_size))
-        @test residual_block(x) |> size == (97, 97, 3, 13)
-    
-        # OperatorUNetGenerator
-        img_size = 256
-        batch_size = 2
-        in_channels = 1
-        num_features = 2
-        num_residual = 2
-        unet = OperatorUNetGenerator(in_channels, num_features, num_residual)
-        x = randn(FT, (img_size, img_size, in_channels, batch_size))
-        @test unet(x) |> size == (img_size, img_size, in_channels, batch_size)
+        @test op(x) |> size == (97, 97, 3, 13)
     end
 end

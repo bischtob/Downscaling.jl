@@ -8,7 +8,7 @@ using Flux: params, update!
 using Flux.Data: DataLoader
 using NeuralOperators
 using Random
-using Downscaling: PatchDiscriminator, UNetGenerator
+using Downscaling: UNetOperatorDiscriminator, UNetOperatorGenerator
 
 # Parameters
 FT = Float32
@@ -30,23 +30,20 @@ gen_lr = FT(0.0002)
 color_format = Gray
 
 # Define models
-ch = (1, 8, 8, 8, 8, 8, 1)
-modes = ((4, 4), (256, 256), (256, 256), (256, 256),)
-σ = gelu
-generator_B = Chain(
-    OperatorConv(1 => ch[3], modes[1], FourierTransform, permuted=true),
-    InstanceNorm(ch[3]),
-    x -> gelu.(x),
-    OperatorConv(ch[3] => ch[4], modes[2], FourierTransform, permuted=true),
-    InstanceNorm(ch[4]),
-    x -> gelu.(x),
-    OperatorConv(ch[4] => ch[5], modes[3], FourierTransform, permuted=true),
-    InstanceNorm(ch[5]),
-    x -> gelu.(x),
-    OperatorConv(ch[5] => 1, modes[4], FourierTransform, permuted=true),
-    x -> tanh.(x),
+generator_B = UNetOperatorGenerator(
+    input_channels, 
+    32, 
+    (64, 64),
+    4,
+    4,
 ) |> device
-discriminator_A = PatchDiscriminator(input_channels) |> device # Discriminator For Domain B
+discriminator_A = UNetOperatorDiscriminator(
+    input_channels,
+    32,
+    (64, 64),
+    4,
+    4,
+) |> device 
 networks = (generator_B, discriminator_A)
 
 function generator_loss(a, b)

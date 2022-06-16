@@ -2,24 +2,77 @@
 using Flux
 using Functors
 using NeuralOperators
+using Statistics
+
 
 """
-    UNetDiscriminator
+    UNetOperatorGenerator
 """
-struct UNetDiscriminator
+struct UNetOperatorGenerator
     unet
-    knet
 end
-#         kx = self.knet(grid)
-        kx = kx.view(batch_size,-1, 1)
-        x = x.view(batch_size,-1, 1)
-        x = torch.einsum('bik,bik->bk', kx, x)/(res1*res2)
 
+@functor UNetOperatorGenerator
 
-@functor UNetDiscriminator
+function UNetOperatorGenerator(
+    in_channels::Int,
+    num_features::Int,
+    num_modes::Tuple,
+    num_subsample::Int,
+    num_nonlinear::Int;
+    σ=gelu,
+    kwargs...
+)
+    return UNetOperatorGenerator(
+        UNetOperator(
+            in_channels,
+            num_features,
+            num_modes,
+            num_subsample,
+            num_nonlinear,
+            σ=σ,
+            kwargs...
+         )
+    )
+end
 
-function (op::UNetDiscriminator)(x)
-    return op.knet(op.unet(x))
+function (op::UNetOperatorGenerator)(x)
+    return tanh.(op.unet(x))
+end
+
+"""
+    UNetOperatorDiscriminator
+"""
+struct UNetOperatorDiscriminator
+    unet
+end
+
+@functor UNetOperatorDiscriminator
+
+function UNetOperatorDiscriminator(
+    in_channels::Int,
+    num_features::Int,
+    num_modes::Tuple,
+    num_subsample::Int,
+    num_nonlinear::Int;
+    σ=gelu,
+    kwargs...
+)
+    return UNetOperatorDiscriminator(
+        UNetOperator(
+            in_channels,
+            num_features,
+            num_modes,
+            num_subsample,
+            num_nonlinear,
+            σ=σ,
+            kwargs...
+        )
+    )
+end
+
+function (op::UNetOperatorDiscriminator)(x)
+    return sigmoid.(mean(op.unet(x)))
 end
 
 
@@ -46,9 +99,9 @@ function UNetOperator(
     kwargs...
 )
     lifting = Chain(
-        Dense(in_channels, num_features),
+        Dense(in_channels, div(num_features, 2)),
         x -> σ.(x),
-        Dense(num_features, num_features),
+        Dense(div(num_features, 2), num_features),
     )
 
     downsampling = [
@@ -56,17 +109,22 @@ function UNetOperator(
     ]
 
     nonlinear = Chain(
-        [OperatorBlock(num_features * 2^num_subsample, div.(num_modes, Ref(2^num_subsample)), σ=σ, kwargs...) for _ in range(1, length=num_nonlinear)]...
+        [OperatorBlock(num_features * 2^num_subsample, num_features * 2^num_subsample, div.(num_modes, Ref(2^num_subsample)), σ=σ, kwargs...) for _ in range(1, length=num_nonlinear)]...
     )
 
-    upsampling = [
-        OperatorBlock(num_features * 2^i, num_features * 2^(i - 1), div.(num_modes, Ref(2^i)), σ=σ, kwargs...) for i in reverse(1:num_subsample)
-    ]
+    upsampling = []
+    for i in reverse(1:num_subsample)
+        if i == num_subsample
+            push!(upsampling, OperatorBlock(num_features * 2^i, num_features * 2^(i - 1), div.(num_modes, Ref(2^(i - 1))), σ=σ, kwargs...))
+        else
+            push!(upsampling, OperatorBlock(num_features * 2^(i + 1), num_features * 2^(i - 1), div.(num_modes, Ref(2^(i - 1))), σ=σ, kwargs...))
+        end
+    end
 
     projection = Chain(
-        Dense(num_features, num_features),
+        Dense(num_features, 2 * num_features),
         x -> σ.(x),
-        Dense(num_features, in_channels),
+        Dense(2 * num_features, in_channels),
     )
 
     return UNetOperator(
@@ -80,18 +138,27 @@ end
 
 function (op::UNetOperator)(x)
     input = permutedims(x, (3, 2, 1, 4))
-    input = op.lifting(x)
+    input = op.lifting(input)
 
+    # downsampling and storing for bypass connections
     ds_layers = []
-    for layer in op.downsampling
+    for (idx, layer) in enumerate(op.downsampling)
         input = layer(input)
-        push!(ds_layers, input)
+        if idx < length(op.downsampling)
+            push!(ds_layers, input)
+        end
     end
 
-    input = net.nonlinear(input)
+    # nonlinear layers without down- or upsampling
+    input = op.nonlinear(input)
 
-    for layer in net.upsampling
-        input = Flux.stack([layer(input), pop!(ds_layers)], dims=1)
+    # upsampling with adding bypass connections
+    for (idx, layer) in enumerate(op.upsampling)
+        if idx < length(op.upsampling)
+            input = vcat([layer(input), pop!(ds_layers)]...)
+        else
+            input = layer(input)
+        end
     end
 
     input = op.projection(input)
@@ -118,7 +185,7 @@ function OperatorBlock(
     permuted=false,
     normed=false
 )
-    return ConvBlock(
+    return OperatorBlock(
         Chain(
             OperatorKernel(in_channels => out_channels, modes, transform, σ, permuted=permuted),
             if normed
@@ -130,6 +197,6 @@ function OperatorBlock(
     )
 end
 
-function (net::OperatorConvBlock)(x)
+function (net::OperatorBlock)(x)
     return net.block(x)
 end
