@@ -32,15 +32,15 @@ color_format = Gray
 # Define models
 generator_B = UNetOperatorGenerator(
     input_channels, 
-    32, 
-    (64, 64),
+    4, 
+    (12, 12),
     4,
     4,
 ) |> device
 discriminator_A = UNetOperatorDiscriminator(
     input_channels,
-    32,
-    (64, 64),
+    4,
+    (12, 12),
     4,
     4,
 ) |> device 
