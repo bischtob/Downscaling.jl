@@ -75,15 +75,15 @@ using Statistics
 # end
 
 """
-    UNetOperator
+    UNetOperator2D
 """
-struct UNetOperator
+struct UNetOperator2D
     network
 end
 
-@functor UNetOperator
+@functor UNetOperator2D
 
-function UNetOperator(n_channel::Int, n_codim::Int, n_modes::Int; trafo=FourierTransform, σ=gelu)
+function UNetOperator2D(n_channel::Int, n_codim::Int, n_modes::Int; trafo=FourierTransform, σ=gelu)
     @assert n_codim ÷ 2 > 0
     @assert n_modes ÷ 64 > 0
 
@@ -95,23 +95,23 @@ function UNetOperator(n_channel::Int, n_codim::Int, n_modes::Int; trafo=FourierT
                     Dense(n_codim ÷ 2, n_codim, σ),
                     SkipConnection(
                         Chain(
-                            OperatorKernel(n_codim=>2n_codim, (n_modes÷4, n_modes÷4), trafo, σ),
+                            OperatorBlock2D(n_codim=>2n_codim, (n_modes÷4, n_modes÷4), trafo, σ),
                             SkipConnection(
                                 Chain(
-                                    OperatorKernel(2n_codim=>4n_codim, (n_modes÷16, n_modes÷16), trafo, σ),
+                                    OperatorBlock2D(2n_codim=>4n_codim, (n_modes÷16, n_modes÷16), trafo, σ),
                                     SkipConnection(
                                         Chain(
-                                            OperatorKernel(4n_codim=>8n_codim, (n_modes÷64, n_modes÷64), trafo, σ),
-                                            OperatorKernel(8n_codim=>8n_codim, (n_modes÷64, n_modes÷64), trafo, σ),
-                                            OperatorKernel(8n_codim=>4n_codim, (n_modes÷16, n_modes÷16), trafo, σ),
+                                            OperatorBlock2D(4n_codim=>8n_codim, (n_modes÷64, n_modes÷64), trafo, σ),
+                                            OperatorBlock2D(8n_codim=>8n_codim, (n_modes÷64, n_modes÷64), trafo, σ),
+                                            OperatorBlock2D(8n_codim=>4n_codim, (n_modes÷16, n_modes÷16), trafo, σ),
                                         ),
                                         vcat,
                                     ),
-                                    OperatorKernel(8n_codim=>2n_codim, (n_modes÷4, n_modes÷4), trafo, σ),
+                                    OperatorBlock2D(8n_codim=>2n_codim, (n_modes÷4, n_modes÷4), trafo, σ),
                                 ),
                                 vcat,
                             ),
-                            OperatorKernel(4n_codim=>n_codim, (n_modes, n_modes), trafo, σ),
+                            OperatorBlock2D(4n_codim=>n_codim, (n_modes, n_modes), trafo, σ),
                         ),
                         vcat,
                     ),
@@ -122,9 +122,37 @@ function UNetOperator(n_channel::Int, n_codim::Int, n_modes::Int; trafo=FourierT
             Dense(3n_codim + n_codim÷2, n_channel, σ),
         )
 
-    return UNetOperator(network)
+    return UNetOperator2D(network)
 end
 
-function (op::UNetOperator)(x)
+function (op::UNetOperator2D)(x)
+    return op.network(x)
+end
+
+
+"""
+    OperatorBlock2D
+"""
+struct OperatorBlock2D
+    network
+end
+
+@functor OperatorBlock2D
+
+function OperatorBlock2D(channels, modes, trafo=FourierTransform, σ=gelu)
+    _, out_channels = channels
+
+    network = Chain(
+        OperatorKernel(channels, modes, trafo, identity),
+        x -> permutedims(x, (3, 2, 1, 4)),
+        InstanceNorm(out_channels),
+        x -> permutedims(x, (3, 2, 1, 4)),
+        x -> σ.(x),
+    )
+
+    return OperatorBlock2D(network)
+end
+
+function (op::OperatorBlock2D)(x)
     return op.network(x)
 end
