@@ -8,12 +8,12 @@ using MLUtils
 using Downscaling: UNetOperator2D
 
 
-function get_dataloader(path; split_ratio=0.5, batchsize=4)
+function get_dataloader(path; split_ratio=0.5, batchsize=4, sampling_rate=2)
     # TODO! Make this HDF5 based stuff, wtf. single file path!
     file = MAT.matopen(path)
     X, Y = read(file, "coeff"), read(file, "sol")
-    X = permutedims(X[:, :, :, :], (4, 2, 3, 1))
-    Y = permutedims(Y[:, :, :, :], (4, 2, 3, 1))
+    X = permutedims(X[:, :, :, :], (4, 2, 3, 1))[:, 1:sampling_rate:end, 1:sampling_rate:end, :]
+    Y = permutedims(Y[:, :, :, :], (4, 2, 3, 1))[:, 1:sampling_rate:end, 1:sampling_rate:end, :]
     close(file)
 
     data_training, data_validation = MLUtils.splitobs((X, Y), at=split_ratio)
@@ -49,7 +49,7 @@ function train(; cuda=true, lr=1.0f-4, λ=1.0f-3, nepochs=150)
         @info "Training on CPU"
     end
 
-    data = get_dataloader("../data/darcy/data_file1.mat"; split_ratio=0.8, batchsize=1)
+    data = get_dataloader("../data/darcy/data_file1.mat"; split_ratio=0.8, batchsize=4)
     model = UNetOperator2D(1, 32, 64)
     loss_func = loss
     optimizer = Flux.Optimiser(

@@ -4,8 +4,8 @@ import Downscaling: UNetOperator2D
 
 function benchmark()
     # benchmark UNetOperator
-    img_size = 421
-    batch_size = 4
+    img_size = 64
+    batch_size = 20
     n_channel = 1
     n_codim = 32
     n_modes = 64
@@ -15,7 +15,7 @@ function benchmark()
         n_codim,
         n_modes,
     ) |> gpu
-    op(x) |> size |> println
+    #op(x) |> size |> println
 
     # gradient check
     loss = () -> sum(op(x))
@@ -25,4 +25,4 @@ function benchmark()
     nothing
 end
 
-benchmark()
+@benchmark benchmark()
