@@ -119,7 +119,7 @@ function UNetOperator2D(n_channel::Int, n_codim::Int, n_modes::Int; trafo=Fourie
                 ),
                 vcat,
             ),
-            Dense(3n_codim + n_codim÷2, n_channel, σ),
+            Dense(3n_codim + n_codim÷2, n_channel),
         )
 
     return UNetOperator2D(network)

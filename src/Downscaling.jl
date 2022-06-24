@@ -11,13 +11,16 @@ include("generators.jl")
 include("discriminators.jl")
 include("op_generators.jl")
 
+# nns
 export ConvBlock
 export ResidualBlock
 export PatchBlock
 export PatchDiscriminator
 export UNetGenerator
-export OperatorBlock
-export UNetOperator
+
+# nos
+export OperatorBlock2D
+export UNetOperator2D
 export UNetOperatorGenerator
 export UNetOperatorDiscriminator
 
