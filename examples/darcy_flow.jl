@@ -39,7 +39,7 @@ function fit!(learner, nepochs::Int)
     end
 end
 
-function train(; cuda=true, lr=1.0f-4, λ=1.0f-3, nepochs=150)
+function train(; cuda=true, lr=1.0f-3, λ=1.0f-3, nepochs=400)
     if cuda && CUDA.has_cuda()
         device = gpu
         CUDA.allowscalar(false)
@@ -49,13 +49,13 @@ function train(; cuda=true, lr=1.0f-4, λ=1.0f-3, nepochs=150)
         @info "Training on CPU"
     end
 
-    data = get_dataloader("../data/darcy/data_file1.mat"; split_ratio=0.8, batchsize=4)
+    data = get_dataloader("../data/darcy/data_file1.mat"; split_ratio=0.8, batchsize=5)
     model = UNetOperator2D(1, 32, 64)
     loss_func = loss
     optimizer = Flux.Optimiser(
         Flux.ADAM(lr), 
         WeightDecay(λ),
-        ExpDecay(1, 0.5, 50, 1e-6)
+        ExpDecay(1, 0.7, 100, 1e-6)
     )
 
     learner = FluxTraining.Learner(
@@ -78,3 +78,5 @@ function get_model()
 
     return BSON.load(joinpath(model_path, model_file), @__MODULE__)[:model]
 end
+
+train()

@@ -125,6 +125,48 @@ function UNetOperator2D(n_channel::Int, n_codim::Int, n_modes::Int; trafo=Fourie
     return UNetOperator2D(network)
 end
 
+# function UNetOperator2D(n_channel::Int, n_codim::Int, n_modes::Int; trafo=FourierTransform, σ=gelu)
+#     @assert n_codim ÷ 2 > 0
+#     @assert n_modes ÷ 64 > 0
+
+#     network =
+#         Chain(
+#             Dense(n_channel, n_codim ÷ 2, σ),
+#             SkipConnection(
+#                 Chain(
+#                     Dense(n_codim ÷ 2, n_codim, σ),
+#                     SkipConnection(
+#                         Chain(
+#                             OperatorBlock2D(n_codim => 2n_codim, (n_modes ÷ 4, n_modes ÷ 4), trafo, σ),
+#                             SkipConnection(
+#                                 Chain(
+#                                     OperatorBlock2D(2n_codim => 4n_codim, (n_modes ÷ 16, n_modes ÷ 16), trafo, σ),
+#                                     SkipConnection(
+#                                         Chain(
+#                                             OperatorBlock2D(4n_codim => 8n_codim, (n_modes ÷ 64, n_modes ÷ 64), trafo, σ),
+#                                             OperatorBlock2D(8n_codim => 8n_codim, (n_modes ÷ 64, n_modes ÷ 64), trafo, σ),
+#                                             OperatorBlock2D(8n_codim => 4n_codim, (n_modes ÷ 16, n_modes ÷ 16), trafo, σ),
+#                                         ),
+#                                         vcat,
+#                                     ),
+#                                     OperatorBlock2D(8n_codim => 2n_codim, (n_modes ÷ 4, n_modes ÷ 4), trafo, σ),
+#                                 ),
+#                                 vcat,
+#                             ),
+#                             OperatorBlock2D(4n_codim => n_codim, (n_modes, n_modes), trafo, σ),
+#                         ),
+#                         vcat,
+#                     ),
+#                     Dense(2n_codim, 3n_codim, σ),
+#                 ),
+#                 vcat,
+#             ),
+#             Dense(3n_codim + n_codim ÷ 2, n_channel),
+#         )
+
+#     return UNetOperator2D(network)
+# end
+
 function (op::UNetOperator2D)(x)
     return op.network(x)
 end
