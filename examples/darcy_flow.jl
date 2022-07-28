@@ -49,7 +49,7 @@ function train(; cuda=true, lr=1.0f-3, λ=1.0f-3, nepochs=400)
         @info "Training on CPU"
     end
 
-    data = get_dataloader("../data/darcy/data_file1.mat"; split_ratio=0.8, batchsize=5)
+    data = get_dataloader("../data/darcy/data_file1.mat"; split_ratio=0.8, batchsize=4)
     model = UNetOperator2D(1, 32, 64)
     loss_func = loss
     optimizer = Flux.Optimiser(
